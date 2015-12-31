@@ -52,17 +52,17 @@ class Prosper(object):
         self._username = cfg.get(section, 'username')
         self._password = cfg.get(section, 'password')
 
-    def _get(self, path):
+    def _get(self, path, **params):
         url = self._base + path
 
-        r = self._request(requests.get, url)
+        r = self._request(requests.get, url, params=params)
         if r.status_code != 200:
             raise Exception("GET failed with code %d, text %s" %
                             (r.status_code, r.text))
 
         return json.loads(r.text)
 
-    def _request(self, request_fn, url):
+    def _request(self, request_fn, url, params=None):
         auth = "%s %s" % (self._token_type, self._token)
         headers = {
             'Authorization': auth,
@@ -72,17 +72,31 @@ class Prosper(object):
         if headers is None:
             headers = {}
 
-        return request_fn(url, headers=headers)
+        return request_fn(url, headers=headers, params=params)
 
 
     def account(self):
         """Retrieve high level account information"""
-        resp = self._get("accounts/prosper")
-        print "Account info:"
-        print resp
+        return self._get("accounts/prosper")
 
     def notes(self):
-        """Retrieve information about notes owned"""
-        resp = self._get("notes/")
-        print "Notes:"
-        print resp
+        """Retrieve information about notes owned
+
+        NOTE - the api defaults to a `limit` of 25 notes in one response.
+        NOTE - `limit` also maxes at 25.  doh.
+        """
+
+        # just retrieve all the pages.
+        notes = []
+        offset = 0
+        while True:
+            #print "retrieving 25, starting form %d" % offset
+            resp = self._get("notes/", offset=offset)
+            notes.extend(resp['result'])
+            total = resp['total_count']
+            offset += resp['result_count']
+
+            if offset == total:
+                break
+
+        return notes
